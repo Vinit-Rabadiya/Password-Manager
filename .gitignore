@@ -1,0 +1,24 @@
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+# MacOS metadata
+__MACOSX/
+*.DS_Store
+
+# System files
+*.log
+
+# PDF and docs
+*.pdf
+
+# Backup and temp files
+*.tmp
+*.bak
+
+# Editor folders
+.vscode/
+.idea/
+
+# Misc
+.env
