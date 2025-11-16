@@ -90,7 +90,8 @@ class Keychain {
     //parse the representation repr to get stored data
     const parsed = JSON.parse(repr);
     const publicData = parsed.publicData || {};
-    const secretData = parsed.secretData || {};
+    const kvs = parsed.kvs || {};
+    const salt = parsed.salt || (parsed.secretData && parsed.secretData.salt);
 
     // if trustedDataCheck is provided, verify the SHA-256 checksum
     if (trustedDataCheck) {
@@ -105,8 +106,14 @@ class Keychain {
       }
     }
 
+    // Reconstruct secretData from kvs
+    const secretData = {
+      salt: salt,
+      passwordDB: kvs
+    };
+
     //derive key from password and stored salt
-    const salt = decodeBuffer(secretData.salt);
+    const saltBuffer = decodeBuffer(secretData.salt);
     const passwordBuffer = stringToBuffer(password);
     const keyMaterial = await subtle.importKey(
       "raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]
@@ -114,7 +121,7 @@ class Keychain {
     const key = await subtle.deriveKey(
       {
         name: "PBKDF2",
-        salt: salt,
+        salt: saltBuffer,
         iterations: PBKDF2_ITERATIONS,
         hash: "SHA-256"
       },
@@ -126,6 +133,30 @@ class Keychain {
 
     //assign the derived key to secretData
     secretData.key = key;
+
+    // Verify password is correct by attempting to decrypt a test entry
+    // If there are passwords in the database, try to decrypt one to verify the key is correct
+    if (secretData.passwordDB && Object.keys(secretData.passwordDB).length > 0) {
+      try {
+        // Get the first password entry
+        const firstEntry = secretData.passwordDB[Object.keys(secretData.passwordDB)[0]];
+        const iv = decodeBuffer(firstEntry.iv);
+        const ciphertext = decodeBuffer(firstEntry.ciphertext);
+        
+        // Try to decrypt - this will fail if the password/key is wrong
+        await subtle.decrypt(
+          {
+            name: "AES-GCM",
+            iv: iv
+          },
+          key,
+          ciphertext
+        );
+      } catch (err) {
+        // Decryption failed - wrong password, throw error
+        throw new Error('incorrect password');
+      }
+    }
 
     //return a new Keychain object
     return new Keychain(publicData, secretData);
@@ -145,14 +176,21 @@ class Keychain {
     */
   async dump() {
     // Prepare the object to serialize
+    // The kvs object should contain all password entries flattened
+    // Keep salt separate so the test counts only the password entries
+    const kvsObj = {};
+
+    // Add all password entries to kvs (excluding salt, which we handle separately)
+    for (const [key, value] of Object.entries(this.secrets.passwordDB)) {
+      kvsObj[key] = value;
+    }
+
     const obj = {
       publicData: this.data,
-      secretData: {
-        ...this.secrets,
-        // Do not include the key object itself in the dump
-        key: undefined
-      }
+      kvs: kvsObj,
+      salt: this.secrets.salt  // Store salt at root level, not in kvs
     };
+
     const jsonStr = JSON.stringify(obj);
 
     // Compute SHA-256 checksum
@@ -176,7 +214,33 @@ class Keychain {
     * Return Type: Promise<string>
     */
   async get(name) {
-    throw "Not Implemented!";
+    // Hash the name to encrypt domain names
+    const nameHash = await this._hashName(name);
+
+    // Check if the hashed name exists in the password database
+    if (!(nameHash in this.secrets.passwordDB)) {
+      return null;
+    }
+
+    // Retrieve the encrypted data for this hashed name
+    const encryptedData = this.secrets.passwordDB[nameHash];
+
+    // Extract IV (initialization vector) and ciphertext from the stored data
+    const iv = decodeBuffer(encryptedData.iv);
+    const ciphertext = decodeBuffer(encryptedData.ciphertext);
+
+    // Decrypt the password using AES-GCM
+    const decryptedBuffer = await subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: iv
+      },
+      this.secrets.key,
+      ciphertext
+    );
+
+    // Convert the decrypted buffer back to a string and return
+    return bufferToString(decryptedBuffer);
   };
 
   /**
@@ -190,7 +254,30 @@ class Keychain {
   * Return Type: void
   */
   async set(name, value) {
-    throw "Not Implemented!";
+    // Hash the name to encrypt domain names
+    const nameHash = await this._hashName(name);
+
+    // Generate a random IV (initialization vector) for this encryption
+    const iv = getRandomBytes(12);
+
+    // Convert the password value to a buffer
+    const passwordBuffer = stringToBuffer(value);
+
+    // Encrypt the password using AES-GCM
+    const ciphertext = await subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv: iv
+      },
+      this.secrets.key,
+      passwordBuffer
+    );
+
+    // Store the encrypted data (IV + ciphertext) in the password database using hashed name
+    this.secrets.passwordDB[nameHash] = {
+      iv: encodeBuffer(iv),           // Store IV as encoded string
+      ciphertext: encodeBuffer(ciphertext)  // Store ciphertext as encoded string
+    };
   };
 
   /**
@@ -202,7 +289,37 @@ class Keychain {
     * Return Type: Promise<boolean>
   */
   async remove(name) {
-    throw "Not Implemented!";
+    // Hash the name to encrypt domain names
+    const nameHash = await this._hashName(name);
+
+    // Check if the hashed name exists in the password database
+    if (!(nameHash in this.secrets.passwordDB)) {
+      return false;  // Entry doesn't exist, return false
+    }
+
+    // Delete the entry from the password database
+    delete this.secrets.passwordDB[nameHash];
+
+    // Return true to indicate successful removal
+    return true;
+  };
+
+  /**
+   * Helper function to hash domain names for privacy.
+   * Uses SHA-256 to create a consistent hash of the domain name.
+   * This way, domain names are not stored in plain text.
+   *
+   * Arguments:
+   *   name: string (domain name)
+   * Return Type: Promise<string> (hex encoded hash)
+   */
+  async _hashName(name) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(name);
+    const hashBuffer = await subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
   };
 };
 
