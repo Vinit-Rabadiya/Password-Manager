@@ -8,7 +8,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔐 Password Manager</h1>
+        <h1>Password Manager</h1>
         
         <!-- Setup Section -->
         <div id="setup-section" class="section">
@@ -22,7 +22,7 @@
             <div id="init-form" class="form-container hidden">
                 <h3>Create New Keychain</h3>
                 <input type="password" id="init-password" placeholder="Master Password" class="input">
-                <button onclick="initKeychain()" class="btn btn-success">Initialize</button>
+                <button onclick="initKeychain()" class="btn btn-success">Create</button>
                 <button onclick="hideSetupForms()" class="btn btn-cancel">Cancel</button>
             </div>
 
@@ -40,7 +40,7 @@
         <!-- Manager Section -->
         <div id="manager-section" class="section hidden">
             <div class="status-bar">
-                <span class="status-active">✓ Keychain Active</span>
+                <span class="status-active">Keychain Active</span>
                 <button onclick="exportKeychain()" class="btn btn-small">Export</button>
             </div>
 
