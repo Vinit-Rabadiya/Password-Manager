@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Manager</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Password Manager</h1>
+        
+        <!-- Setup Section -->
+        <div id="setup-section" class="section">
+            <h2>Setup Keychain</h2>
+            <div class="form-group">
+                <button onclick="showInitForm()" class="btn btn-primary">Create New Keychain</button>
+                <button onclick="showLoadForm()" class="btn btn-secondary">Load Existing Keychain</button>
+            </div>
+
+            <!-- Init Form -->
+            <div id="init-form" class="form-container hidden">
+                <h3>Create New Keychain</h3>
+                <input type="password" id="init-password" placeholder="Master Password" class="input">
+                <button onclick="initKeychain()" class="btn btn-success">Initialize</button>
+                <button onclick="hideSetupForms()" class="btn btn-cancel">Cancel</button>
+            </div>
+
+            <!-- Load Form -->
+            <div id="load-form" class="form-container hidden">
+                <h3>Load Existing Keychain</h3>
+                <input type="password" id="load-password" placeholder="Master Password" class="input">
+                <textarea id="load-data" placeholder="Paste keychain data here" class="textarea"></textarea>
+                <input type="text" id="load-checksum" placeholder="Checksum (optional)" class="input">
+                <button onclick="loadKeychain()" class="btn btn-success">Load</button>
+                <button onclick="hideSetupForms()" class="btn btn-cancel">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Manager Section -->
+        <div id="manager-section" class="section hidden">
+            <div class="status-bar">
+                <span class="status-active">✓ Keychain Active</span>
+                <button onclick="exportKeychain()" class="btn btn-small">Export</button>
+            </div>
+
+            <!-- Add/Update Password -->
+            <div class="form-container">
+                <h3>Add/Update Password</h3>
+                <input type="text" id="set-name" placeholder="Domain/Service Name" class="input">
+                <input type="text" id="set-password" placeholder="Password" class="input">
+                <button onclick="setPassword()" class="btn btn-primary">Save Password</button>
+            </div>
+
+            <!-- Get Password -->
+            <div class="form-container">
+                <h3>Retrieve Password</h3>
+                <input type="text" id="get-name" placeholder="Domain/Service Name" class="input">
+                <button onclick="getPassword()" class="btn btn-primary">Get Password</button>
+                <div id="get-result" class="result"></div>
+            </div>
+
+            <!-- Remove Password -->
+            <div class="form-container">
+                <h3>Remove Password</h3>
+                <input type="text" id="remove-name" placeholder="Domain/Service Name" class="input">
+                <button onclick="removePassword()" class="btn btn-danger">Remove Password</button>
+            </div>
+
+            <!-- Change Master Password -->
+            <div class="form-container">
+                <h3>Change Master Password</h3>
+                <input type="password" id="current-password" placeholder="Current Master Password" class="input">
+                <input type="password" id="new-password" placeholder="New Master Password" class="input">
+                <input type="password" id="confirm-password" placeholder="Confirm New Password" class="input">
+                <button onclick="changeMasterPassword()" class="btn btn-primary">Change Master Password</button>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="message" class="message"></div>
+
+        <!-- Export Modal -->
+        <div id="export-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Export Keychain</h3>
+                <p>Save this data securely to load your keychain later:</p>
+                <div class="export-data">
+                    <label>Data:</label>
+                    <textarea id="export-data" readonly class="textarea"></textarea>
+                    <label>Checksum:</label>
+                    <input type="text" id="export-checksum" readonly class="input">
+                </div>
+                <button onclick="closeExportModal()" class="btn btn-primary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
