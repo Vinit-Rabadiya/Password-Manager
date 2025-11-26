@@ -1,13 +1,7 @@
 // UI State Management
 let keychainActive = false;
 
-// Check keychain status on load
-window.addEventListener('load', async () => {
-    const status = await fetchAPI('/api/status');
-    if (status.active) {
-        showManagerSection();
-    }
-});
+// Page always starts with setup - no auto-login
 
 // API Helper
 async function fetchAPI(url, options = {}) {
@@ -19,6 +13,13 @@ async function fetchAPI(url, options = {}) {
                 ...options.headers
             }
         });
+        
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Server returned invalid response');
+        }
+        
         const data = await response.json();
         if (!response.ok) {
             throw new Error(data.error || 'Request failed');
@@ -224,5 +225,21 @@ async function changeMasterPassword() {
         document.getElementById('confirm-password').value = '';
     } catch (error) {
         // Error already shown by fetchAPI
+    }
+}
+
+async function logout() {
+    if (confirm('Are you sure you want to logout? Make sure you exported your keychain!')) {
+        // Just clear the UI, don't worry about server
+        showMessage('Logged out successfully', 'success');
+        document.getElementById('manager-section').classList.add('hidden');
+        document.getElementById('setup-section').classList.remove('hidden');
+        keychainActive = false;
+        
+        // Clear server session in background
+        fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).catch(() => {});
     }
 }

@@ -3,17 +3,43 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const { Keychain } = require('./password-manager');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = 3000;
 
-// Middleware
+// Middleware - API routes must come before static files
 app.use(bodyParser.json());
-app.use(express.static('public'));
 
 // In-memory session storage (for demo purposes)
 let activeKeychain = null;
 let masterPassword = null;
+
+// Create passwords folder if it doesn't exist
+const PASSWORDS_DIR = path.join(__dirname, 'passwords');
+if (!fs.existsSync(PASSWORDS_DIR)) {
+  fs.mkdirSync(PASSWORDS_DIR);
+}
+
+// Helper function to save password entry to file
+async function savePasswordToFile(domainName, domainHash, iv, ciphertext) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `${timestamp}.txt`;
+  const filepath = path.join(PASSWORDS_DIR, filename);
+  
+  const content = `PASSWORD ENTRY
+Domain Name: ${domainName}
+Saved At: ${new Date().toISOString()}
+HASHED DOMAIN (SHA-256): ${domainHash}
+INITIALIZATION VECTOR (IV): ${iv}
+ENCRYPTED PASSWORD (AES-GCM): ${ciphertext}
+`;
+
+  fs.writeFileSync(filepath, content.trim());
+  console.log(`✅ Password saved to: ${filename}`);
+  return filename;
+}
 
 // Initialize new keychain
 app.post('/api/init', async (req, res) => {
@@ -79,9 +105,31 @@ app.post('/api/set', async (req, res) => {
       return res.status(400).json({ error: 'No active keychain' });
     }
     const { name, password } = req.body;
+    console.log(`Setting password for: ${name}`);
     await activeKeychain.set(name, password);
-    res.json({ success: true, message: 'Password saved' });
+    
+    // Save to file with timestamp
+    const [data, checksum] = await activeKeychain.dump();
+    const parsed = JSON.parse(data);
+    const nameHash = await activeKeychain._hashName(name);
+    console.log(`Name hash: ${nameHash}`);
+    console.log(`KVS keys:`, Object.keys(parsed.kvs));
+    const entry = parsed.kvs[nameHash];
+    console.log(`Entry found:`, !!entry);
+    
+    if (entry) {
+      const filename = await savePasswordToFile(name, nameHash, entry.iv, entry.ciphertext);
+      res.json({ 
+        success: true, 
+        message: 'Password saved',
+        file: filename 
+      });
+    } else {
+      console.log('Entry not found in kvs!');
+      res.json({ success: true, message: 'Password saved but file not created' });
+    }
   } catch (error) {
+    console.error('Error in /api/set:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -103,6 +151,15 @@ app.post('/api/remove', async (req, res) => {
 // Check if keychain is active
 app.get('/api/status', (req, res) => {
   res.json({ active: !!activeKeychain });
+});
+
+// Logout / Reset keychain
+app.post('/api/logout', (req, res) => {
+  console.log('Logout request received');
+  activeKeychain = null;
+  masterPassword = null;
+  console.log('Keychain cleared');
+  res.status(200).json({ success: true, message: 'Keychain cleared' });
 });
 
 // Change master password
@@ -135,6 +192,11 @@ app.post('/api/change-password', async (req, res) => {
   }
 });
 
+// Serve static files AFTER API routes
+app.use(express.static('public'));
+
 app.listen(PORT, () => {
   console.log(`Password Manager server running at http://localhost:${PORT}`);
+  console.log(`Password files will be saved to: ${PASSWORDS_DIR}`);
+  console.log(`Each password creates a file named: [timestamp].txt`);
 });
