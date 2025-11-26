@@ -197,6 +197,4 @@ app.use(express.static('public'));
 
 app.listen(PORT, () => {
   console.log(`Password Manager server running at http://localhost:${PORT}`);
-  console.log(`Password files will be saved to: ${PASSWORDS_DIR}`);
-  console.log(`Each password creates a file named: [timestamp].txt`);
 });
